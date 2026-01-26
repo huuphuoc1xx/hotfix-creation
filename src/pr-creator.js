@@ -1,10 +1,7 @@
 const simpleGit = require('simple-git');
 const chalk = require('chalk');
 const inquirer = require('inquirer');
-const { Octokit } = require('@octokit/rest');
-const fs = require('fs').promises;
-const path = require('path');
-const os = require('os');
+const GitHubUtils = require('./utils/github-utils');
 
 class PullRequestCreator {
   constructor(options = {}) {
@@ -12,63 +9,32 @@ class PullRequestCreator {
     this.devPrNumber = options.devPrNumber;
     this.qaBranch = options.qaBranch;
     this.uatBranch = options.uatBranch;
-    this.githubToken = options.githubToken || process.env.GITHUB_TOKEN;
+    this.githubToken = options.githubToken;
     this.octokit = null;
     this.owner = null;
     this.repo = null;
   }
 
-  async loadToken() {
-    // If token already provided, use it
-    if (this.githubToken) {
-      return this.githubToken;
-    }
-
-    // Try to load from saved file
-    try {
-      const tokenFile = path.join(os.homedir(), '.create-hotfix', 'github-token');
-      const token = await fs.readFile(tokenFile, 'utf-8');
-      this.githubToken = token.trim();
-      return this.githubToken;
-    } catch (error) {
-      // File doesn't exist or can't be read
-      return null;
-    }
-  }
-
   async run() {
     try {
-      // Load GitHub token
-      await this.loadToken();
+      // Initialize GitHub client
+      this.octokit = await GitHubUtils.initOctokit(this.githubToken);
       
-      if (!this.githubToken) {
-        throw new Error('GitHub token not found. Please run "setup-token" command first, or set GITHUB_TOKEN environment variable, or use --token option.');
+      // Verify token
+      const verification = await GitHubUtils.verifyToken(this.octokit);
+      if (!verification.valid) {
+        throw new Error('Invalid GitHub token. Please run "cggit setup" to update your token.');
       }
-
-      this.octokit = new Octokit({ auth: this.githubToken });
-
-      // Verify token is valid by checking authentication
-      try {
-        const { data: user } = await this.octokit.users.getAuthenticated();
-        console.log(chalk.gray(`Authenticated as: ${user.login}`));
-      } catch (error) {
-        if (error.status === 401) {
-          console.log('');
-          console.log(chalk.red('❌ GitHub token is invalid or expired'));
-          console.log('');
-          console.log(chalk.yellow('Please run: cggit setup-token'));
-          console.log('');
-          throw new Error('Invalid GitHub token. Please setup a valid token.');
-        }
-        throw error;
-      }
+      console.log(chalk.gray(`Authenticated as: ${verification.user.login}`));
 
       // Get current branch
       const currentBranch = await this.getCurrentBranch();
       console.log(chalk.green(`Current branch: ${currentBranch}`));
 
-      // Parse repository info from remote FIRST (needed for GitHub API calls)
-      await this.parseRepositoryInfo();
+      // Parse repository info
+      const repoInfo = await GitHubUtils.parseRepositoryInfo();
+      this.owner = repoInfo.owner;
+      this.repo = repoInfo.repo;
       console.log(chalk.green(`Repository: ${this.owner}/${this.repo}`));
 
       // Try to extract DEV PR number from branch name if not provided
@@ -246,41 +212,6 @@ class PullRequestCreator {
         console.log(chalk.yellow(`  This may indicate: repository not found, no access, or incorrect token permissions`));
       }
       return null;
-    }
-  }
-
-  async parseRepositoryInfo() {
-    try {
-      const remotes = await this.git.getRemotes(true);
-      const origin = remotes.find(r => r.name === 'origin');
-      
-      if (!origin) {
-        throw new Error('No origin remote found');
-      }
-
-      // Parse GitHub URL (supports both HTTPS and SSH)
-      const url = origin.refs.fetch;
-      let match;
-      
-      // Try SSH format: git@github.com:owner/repo.git
-      match = url.match(/git@github\.com:(.+?)\/(.+?)(?:\.git)?$/);
-      if (match) {
-        this.owner = match[1];
-        this.repo = match[2];
-        return;
-      }
-
-      // Try HTTPS format: https://github.com/owner/repo.git
-      match = url.match(/https:\/\/github\.com\/(.+?)\/(.+?)(?:\.git)?$/);
-      if (match) {
-        this.owner = match[1];
-        this.repo = match[2];
-        return;
-      }
-
-      throw new Error('Could not parse GitHub repository URL');
-    } catch (error) {
-      throw new Error(`Failed to parse repository info: ${error.message}`);
     }
   }
 

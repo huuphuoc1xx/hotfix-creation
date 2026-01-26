@@ -96,14 +96,75 @@ program
     }
   });
 
+// Create release tag command
+program
+  .command('release')
+  .description('Create release tag for QA or UAT')
+  .option('--qa <branch>', 'Create QA release tag from QA branch')
+  .option('--uat <branch>', 'Create UAT release tag from UAT branch')
+  .option('--version <version>', 'Specific version tag (e.g., v1.23.5). If not provided, auto-increments from latest')
+  .option('--draft', 'Create as draft release (default: false)')
+  .option('--helm', 'Generate helm chart with version matching tag (default: false)')
+  .action(async (options) => {
+    try {
+      // Check that exactly one of qa or uat is provided
+      if ((!options.qa && !options.uat) || (options.qa && options.uat)) {
+        console.error(chalk.red('Error: Must provide exactly one of --qa or --uat'));
+        console.log(chalk.yellow('\nExamples:'));
+        console.log('  cggit release --qa release/v1.23                    # Auto-increment from latest');
+        console.log('  cggit release --qa release/v1.23 --version v1.23.5  # Specific version');
+        console.log('  cggit release --qa release/v1.23 --draft            # Create as draft');
+        console.log('  cggit release --qa release/v1.23 --helm             # Generate helm chart');
+        console.log('  cggit release --uat release/v1.23');
+        process.exit(1);
+      }
+
+      const ReleaseCreator = require('../src/release-creator');
+      const creator = new ReleaseCreator({
+        environment: options.qa ? 'qa' : 'uat',
+        baseBranch: options.qa || options.uat,
+        version: options.version,
+        draft: options.draft,
+        helm: options.helm
+      });
+
+      await creator.run();
+    } catch (error) {
+      console.error(chalk.red(`\nError: ${error.message}`));
+      process.exit(1);
+    }
+  });
+
+// Generate helm chart command
+program
+  .command('helm')
+  .description('Trigger GitHub workflow to update helm chart')
+  .option('--version <version>', 'Version for helm chart (e.g., v1.23.5 or 1.23.5)')
+  .action(async (options) => {
+    try {
+      const HelmGenerator = require('../src/helm-generator');
+      const generator = new HelmGenerator({
+        version: options.version
+      });
+
+      await generator.run();
+    } catch (error) {
+      console.error(chalk.red(`\nError: ${error.message}`));
+      process.exit(1);
+    }
+  });
+
 // Show help if no command provided
 if (process.argv.length === 2) {
   program.outputHelp();
   console.log('');
   console.log(chalk.cyan('Examples:'));
-  console.log(chalk.gray('  cggit setup                           # Setup GitHub token'));
-  console.log(chalk.gray('  cggit hotfix --qa qa-release-1.0      # Create hotfix branches'));
-  console.log(chalk.gray('  cggit pr --qa qa-release-1.0          # Create PRs'));
+  console.log(chalk.gray('  cggit setup                                         # Setup GitHub token'));
+  console.log(chalk.gray('  cggit hotfix --qa qa-release-1.0                    # Create hotfix branches'));
+  console.log(chalk.gray('  cggit pr --qa qa-release-1.0                        # Create PRs'));
+  console.log(chalk.gray('  cggit release --qa release/v1.23                    # Auto-increment release'));
+  console.log(chalk.gray('  cggit release --qa release/v1.23 --version v1.23.5  # Specific version'));
+  console.log(chalk.gray('  cggit helm --version v1.23.5                        # Update helm chart'));
   console.log('');
 }
 
