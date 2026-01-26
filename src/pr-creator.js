@@ -47,23 +47,51 @@ class PullRequestCreator {
 
       this.octokit = new Octokit({ auth: this.githubToken });
 
+      // Verify token is valid by checking authentication
+      try {
+        const { data: user } = await this.octokit.users.getAuthenticated();
+        console.log(chalk.gray(`Authenticated as: ${user.login}`));
+      } catch (error) {
+        if (error.status === 401) {
+          console.log('');
+          console.log(chalk.red('❌ GitHub token is invalid or expired'));
+          console.log('');
+          console.log(chalk.yellow('Please run: cggit setup-token'));
+          console.log('');
+          throw new Error('Invalid GitHub token. Please setup a valid token.');
+        }
+        throw error;
+      }
+
       // Get current branch
       const currentBranch = await this.getCurrentBranch();
       console.log(chalk.green(`Current branch: ${currentBranch}`));
 
+      // Parse repository info from remote FIRST (needed for GitHub API calls)
+      await this.parseRepositoryInfo();
+      console.log(chalk.green(`Repository: ${this.owner}/${this.repo}`));
+
       // Try to extract DEV PR number from branch name if not provided
       if (!this.devPrNumber) {
-        this.devPrNumber = this.findPrByBranch(currentBranch);
+        this.devPrNumber = await this.findPrByBranch(currentBranch);
         if (this.devPrNumber) {
           console.log(chalk.yellow(`Detected DEV PR #${this.devPrNumber} from branch name`));
         } else {
-          throw new Error('Could not detect DEV PR number from branch name. Please provide --dev-pr option.\nExpected branch format: feature/123-description or feature-123 or PR-123 etc.');
+          console.log('');
+          console.log(chalk.red('❌ Could not detect DEV PR number from branch name.'));
+          console.log('');
+          console.log(chalk.yellow('Possible reasons:'));
+          console.log(chalk.gray('  1. Current branch has no associated PR on GitHub'));
+          console.log(chalk.gray(`  2. Current branch: "${currentBranch}" (main/master branches typically have no PR)`));
+          console.log(chalk.gray('  3. GitHub token may not have access to this repository'));
+          console.log('');
+          console.log(chalk.yellow('Solutions:'));
+          console.log(chalk.gray('  1. Switch to a feature branch that has a PR'));
+          console.log(chalk.gray('  2. Or manually provide the DEV PR number: --dev-pr <PR_NUMBER>'));
+          console.log('');
+          throw new Error('DEV PR number is required. Use --dev-pr option or switch to a branch with an existing PR.');
         }
       }
-
-      // Parse repository info from remote
-      await this.parseRepositoryInfo();
-      console.log(chalk.green(`Repository: ${this.owner}/${this.repo}`));
 
       // Get DEV PR details
       console.log(chalk.yellow(`\nFetching DEV PR #${this.devPrNumber}...`));
@@ -156,7 +184,14 @@ class PullRequestCreator {
   async findPrByBranch(branchName) {
     try {
       console.log(chalk.gray(`  Searching GitHub PRs for branch: ${branchName}...`));
+      console.log(chalk.gray(`  Repository: ${this.owner}/${this.repo}`));
       
+      // Verify we have owner and repo
+      if (!this.owner || !this.repo) {
+        console.log(chalk.yellow(`  Warning: Repository info not available yet`));
+        return null;
+      }
+
       // Search for open PRs first
       const { data: openPrs } = await this.octokit.pulls.list({
         owner: this.owner,
@@ -207,6 +242,9 @@ class PullRequestCreator {
       return null;
     } catch (error) {
       console.log(chalk.yellow(`  Warning: Error searching for PR: ${error.message}`));
+      if (error.status === 404) {
+        console.log(chalk.yellow(`  This may indicate: repository not found, no access, or incorrect token permissions`));
+      }
       return null;
     }
   }
@@ -264,7 +302,40 @@ class PullRequestCreator {
       return data;
     } catch (error) {
       if (error.status === 404) {
+        console.log('');
+        console.log(chalk.red(`❌ PR #${prNumber} not found in ${this.owner}/${this.repo}`));
+        console.log('');
+        console.log(chalk.yellow('Possible reasons:'));
+        console.log(chalk.gray('  1. PR number is incorrect'));
+        console.log(chalk.gray('  2. PR exists in a different repository'));
+        console.log(chalk.gray('  3. GitHub token does not have access to this repository'));
+        console.log(chalk.gray('  4. Repository is private and token lacks permissions'));
+        console.log('');
+        console.log(chalk.yellow('To verify:'));
+        console.log(chalk.gray(`  1. Check if PR exists: https://github.com/${this.owner}/${this.repo}/pull/${prNumber}`));
+        console.log(chalk.gray('  2. Verify your token has "repo" scope for private repos'));
+        console.log(chalk.gray('  3. Run: cggit setup-token (to update your token)'));
+        console.log('');
         return null;
+      }
+      if (error.status === 401) {
+        console.log('');
+        console.log(chalk.red('❌ Authentication failed'));
+        console.log('');
+        console.log(chalk.yellow('Your GitHub token is invalid or expired.'));
+        console.log(chalk.gray('Please run: cggit setup-token'));
+        console.log('');
+        throw new Error('GitHub authentication failed. Please setup a valid token.');
+      }
+      if (error.status === 403) {
+        console.log('');
+        console.log(chalk.red('❌ Access forbidden'));
+        console.log('');
+        console.log(chalk.yellow('Your GitHub token does not have permission to access this repository.'));
+        console.log(chalk.gray('Make sure your token has the "repo" scope for private repositories.'));
+        console.log(chalk.gray('Run: cggit setup-token (to create a new token with correct permissions)'));
+        console.log('');
+        throw new Error('GitHub token lacks required permissions.');
       }
       throw error;
     }

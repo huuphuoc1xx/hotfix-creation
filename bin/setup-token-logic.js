@@ -4,7 +4,6 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 const { Octokit } = require('@octokit/rest');
-const { createOAuthDeviceAuth } = require('@octokit/auth-oauth-device');
 
 class TokenManager {
   constructor() {
@@ -31,9 +30,8 @@ class TokenManager {
         name: 'action',
         message: 'What would you like to do?',
         choices: [
-          { name: '🚀 Authorize via browser (Recommended - No copy/paste needed!)', value: 'oauth' },
-          { name: '📝 I have a token - let me enter it manually', value: 'enter' },
-          { name: '🌐 Open GitHub token page in browser', value: 'open' },
+          { name: '🚀 Create new token (Recommended - Opens browser)', value: 'open' },
+          { name: '📝 I already have a token - let me enter it', value: 'enter' },
           { name: '🔍 Check if I already have a token saved', value: 'check' },
           { name: '❌ Exit', value: 'exit' }
         ]
@@ -45,16 +43,30 @@ class TokenManager {
       return;
     }
 
-    if (action === 'oauth') {
-      await this.authorizeViaOAuth();
-      return;
-    }
-
     if (action === 'open') {
-      console.log(chalk.green('\nOpening GitHub token page...'));
+      console.log(chalk.green('\nOpening GitHub token page in your browser...'));
+      console.log(chalk.gray('URL: https://github.com/settings/tokens/new\n'));
+      
       const open = require('open');
       await open('https://github.com/settings/tokens/new?description=Hotfix%20Branch%20Creator&scopes=repo');
-      console.log(chalk.yellow('\nAfter creating your token, run this command again to save it.\n'));
+      
+      console.log(chalk.yellow('Please:'));
+      console.log(chalk.gray('  1. Give your token a name (e.g., "Hotfix Branch Creator")'));
+      console.log(chalk.gray('  2. ✅ Make sure "repo" scope is checked'));
+      console.log(chalk.gray('  3. Click "Generate token" at the bottom'));
+      console.log(chalk.gray('  4. Copy the token (you won\'t see it again!)\n'));
+      
+      // Wait for user to create and copy token
+      await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'ready',
+          message: 'Press Enter when you have copied your token...',
+        }
+      ]);
+      
+      // Now prompt for token entry
+      await this.enterAndSaveToken();
       return;
     }
 
@@ -68,112 +80,6 @@ class TokenManager {
     }
   }
 
-  async authorizeViaOAuth() {
-    console.log(chalk.cyan('\n╔════════════════════════════════════════════════════════════╗'));
-    console.log(chalk.cyan('║        Browser-Based Authorization (OAuth)                ║'));
-    console.log(chalk.cyan('╚════════════════════════════════════════════════════════════╝\n'));
-
-    console.log(chalk.yellow('This will:'));
-    console.log('1. Open GitHub in your browser');
-    console.log('2. Ask you to enter a code');
-    console.log('3. Authorize the application');
-    console.log('4. Automatically save the token\n');
-
-    const { confirm } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'confirm',
-        message: 'Ready to proceed?',
-        default: true
-      }
-    ]);
-
-    if (!confirm) {
-      console.log(chalk.yellow('\nAuthorization cancelled.'));
-      return;
-    }
-
-    try {
-      console.log(chalk.yellow('\nInitializing OAuth flow...\n'));
-
-      const auth = createOAuthDeviceAuth({
-        clientType: 'oauth-app',
-        clientId: 'Iv1.b507a08c87ecfe98',
-        scopes: ['repo'],
-        onVerification: async (verification) => {
-          console.log(chalk.green('╔════════════════════════════════════════════════════════════╗'));
-          console.log(chalk.green('║                   Authorization Code                      ║'));
-          console.log(chalk.green('╚════════════════════════════════════════════════════════════╝\n'));
-          console.log(chalk.cyan('  Your code: ') + chalk.bold.yellow(verification.user_code));
-          console.log(chalk.gray(`  (Expires in ${Math.floor(verification.expires_in / 60)} minutes)\n`));
-          
-          console.log(chalk.yellow('Opening GitHub in your browser...'));
-          console.log(chalk.gray(`URL: ${verification.verification_uri}\n`));
-          
-          const open = require('open');
-          await open(verification.verification_uri);
-          
-          console.log(chalk.cyan('Please:'));
-          console.log(chalk.white('  1. Enter the code: ') + chalk.bold.yellow(verification.user_code));
-          console.log(chalk.white('  2. Click "Authorize"\n'));
-          console.log(chalk.gray('Waiting for authorization...'));
-        }
-      });
-
-      const { token } = await auth({ type: 'oauth' });
-
-      console.log(chalk.green('\n✓ Authorization successful!\n'));
-
-      console.log(chalk.yellow('Verifying token...'));
-      const isValid = await this.verifyTokenString(token);
-
-      if (!isValid) {
-        console.log(chalk.red('\n✗ Token verification failed. Please try again.'));
-        return;
-      }
-
-      console.log(chalk.green('✓ Token is valid!\n'));
-
-      const { saveOption } = await inquirer.prompt([
-        {
-          type: 'list',
-          name: 'saveOption',
-          message: 'How would you like to save the token?',
-          choices: [
-            { name: 'Save to file (~/.create-hotfix/github-token) - Recommended', value: 'file' },
-            { name: 'Show export command for environment variable', value: 'env' },
-            { name: 'Both', value: 'both' },
-            { name: 'Don\'t save (I\'ll use --token flag)', value: 'none' }
-          ]
-        }
-      ]);
-
-      if (saveOption === 'file' || saveOption === 'both') {
-        await this.saveTokenToFile(token);
-      }
-
-      if (saveOption === 'env' || saveOption === 'both') {
-        this.showEnvExport(token);
-      }
-
-      if (saveOption === 'none') {
-        console.log(chalk.yellow('\nToken not saved. Use --token flag when running commands:'));
-        console.log(chalk.gray('  cggit pr --qa qa-release-1.0 --token ' + token.substring(0, 10) + '...'));
-      }
-
-      console.log(chalk.green('\n✓ Setup complete!\n'));
-
-    } catch (error) {
-      if (error.message.includes('access_denied')) {
-        console.log(chalk.red('\n✗ Authorization was denied or cancelled.'));
-      } else if (error.message.includes('expired')) {
-        console.log(chalk.red('\n✗ Authorization code expired. Please try again.'));
-      } else {
-        console.log(chalk.red(`\n✗ Authorization failed: ${error.message}`));
-      }
-      console.log(chalk.yellow('\nYou can try again or use manual token entry.\n'));
-    }
-  }
 
   async enterAndSaveToken() {
     const { token } = await inquirer.prompt([
