@@ -53,7 +53,7 @@ class PullRequestCreator {
 
       // Try to extract DEV PR number from branch name if not provided
       if (!this.devPrNumber) {
-        this.devPrNumber = this.extractPrNumberFromBranch(currentBranch);
+        this.devPrNumber = this.findPrByBranch(currentBranch);
         if (this.devPrNumber) {
           console.log(chalk.yellow(`Detected DEV PR #${this.devPrNumber} from branch name`));
         } else {
