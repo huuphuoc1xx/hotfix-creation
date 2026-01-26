@@ -52,13 +52,7 @@ class ReleaseCreator {
       console.log(chalk.green(`\nEnvironment: ${envUpper}`));
       console.log(chalk.green(`Base branch: ${this.baseBranch}`));
 
-      // Load GitHub token and setup Octokit (REQUIRED)
-      await this.loadToken();
-      if (!this.githubToken) {
-        throw new Error('GitHub token not found. Please run "cggit setup" first.');
-      }
-
-      // Initialize GitHub client
+      // Initialize GitHub client (will load token automatically)
       this.octokit = await GitHubUtils.initOctokit(this.githubToken);
       
       // Verify token
@@ -299,67 +293,54 @@ class ReleaseCreator {
   async generateHelmChart(version) {
     try {
       console.log(chalk.yellow('\n════════════════════════════════════════════════════════════'));
-      console.log(chalk.yellow('Generating Helm Chart'));
+      console.log(chalk.yellow('Triggering Helm Chart Workflow'));
       console.log(chalk.yellow('════════════════════════════════════════════════════════════\n'));
 
       // Extract version without 'v' prefix (v1.23.5 -> 1.23.5)
       const helmVersion = version.replace(/^v/, '');
       console.log(chalk.cyan(`Helm chart version: ${helmVersion}`));
 
-      // Find Chart.yaml file
-      const chartPath = 'helm/Chart.yaml';
-      console.log(chalk.yellow(`\nLooking for ${chartPath}...`));
-
+      const workflowFile = 'helm-chart.yml';
+      
       try {
-        // Check if file exists
-        const fs = require('fs');
-        if (!fs.existsSync(chartPath)) {
-          console.log(chalk.yellow(`⚠ ${chartPath} not found. Skipping helm chart generation.`));
-          return;
-        }
-
-        // Read Chart.yaml
-        const chartContent = fs.readFileSync(chartPath, 'utf-8');
+        // Trigger GitHub Actions workflow
+        console.log(chalk.yellow(`\nTriggering workflow: ${workflowFile}...`));
         
-        // Update version in Chart.yaml
-        const updatedContent = chartContent.replace(
-          /^version:\s*.+$/m,
-          `version: ${helmVersion}`
-        ).replace(
-          /^appVersion:\s*.+$/m,
-          `appVersion: "${helmVersion}"`
-        );
+        await this.octokit.actions.createWorkflowDispatch({
+          owner: this.owner,
+          repo: this.repo,
+          workflow_id: workflowFile,
+          ref: this.baseBranch,
+          inputs: {
+            version: helmVersion
+          }
+        });
 
-        // Write back
-        fs.writeFileSync(chartPath, updatedContent, 'utf-8');
-        console.log(chalk.green(`✓ Updated ${chartPath}`));
-        console.log(chalk.gray(`  version: ${helmVersion}`));
-        console.log(chalk.gray(`  appVersion: "${helmVersion}"`));
-
-        // Commit changes
-        console.log(chalk.yellow('\nCommitting helm chart changes...'));
-        await this.git.add(chartPath);
-        await this.git.commit(`chore: update helm chart to ${helmVersion}`);
-        console.log(chalk.green('✓ Changes committed'));
-
-        // Push to branch
-        console.log(chalk.yellow('Pushing changes to remote...'));
-        await this.git.push('origin', this.baseBranch);
-        console.log(chalk.green('✓ Changes pushed to remote'));
+        console.log(chalk.green('✓ Workflow triggered successfully!'));
 
         console.log('');
         console.log(chalk.green('════════════════════════════════════════════════════════════'));
-        console.log(chalk.green('✓ Helm chart generated successfully!'));
+        console.log(chalk.green('✓ Helm chart workflow triggered!'));
         console.log(chalk.green('════════════════════════════════════════════════════════════'));
+        console.log('');
+        console.log(chalk.gray(`Workflow: ${workflowFile}`));
+        console.log(chalk.gray(`Branch: ${this.baseBranch}`));
+        console.log(chalk.gray(`Version: ${helmVersion}`));
+        console.log(chalk.gray(`\nCheck workflow status: https://github.com/${this.owner}/${this.repo}/actions`));
         console.log('');
 
       } catch (error) {
-        console.log(chalk.red(`✗ Failed to generate helm chart: ${error.message}`));
-        console.log(chalk.yellow('  Continuing without helm chart generation...'));
+        if (error.status === 404) {
+          console.log(chalk.red(`✗ Workflow '${workflowFile}' not found`));
+          console.log(chalk.yellow('  Skipping helm chart generation...'));
+        } else {
+          console.log(chalk.red(`✗ Failed to trigger helm workflow: ${error.message}`));
+          console.log(chalk.yellow('  Continuing without helm chart generation...'));
+        }
       }
 
     } catch (error) {
-      console.log(chalk.yellow(`⚠ Helm chart generation failed: ${error.message}`));
+      console.log(chalk.yellow(`⚠ Helm chart workflow trigger failed: ${error.message}`));
     }
   }
 }

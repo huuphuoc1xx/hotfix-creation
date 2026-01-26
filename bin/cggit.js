@@ -32,8 +32,8 @@ program
 program
   .command('hotfix')
   .description('Create hotfix branches for QA and/or UAT')
-  .option('--qa <branch>', 'QA base branch name (e.g., qa-release-1.0)')
-  .option('--uat <branch>', 'UAT base branch name (e.g., uat-release-1.0)')
+  .option('-q, --qa <branch>', 'QA base branch name (e.g., qa-release-1.0)')
+  .option('-u, --uat <branch>', 'UAT base branch name (e.g., uat-release-1.0)')
   .option('-n, --no-push', 'Create branches but don\'t push to remote')
   .action(async (options) => {
     try {
@@ -41,9 +41,9 @@ program
       if (!options.qa && !options.uat) {
         console.error(chalk.red('Error: Must provide at least one of --qa or --uat'));
         console.log(chalk.yellow('\nExamples:'));
-        console.log('  cggit hotfix --qa qa-release-1.0');
-        console.log('  cggit hotfix --uat uat-release-1.0');
-        console.log('  cggit hotfix --qa qa-release-1.0 --uat uat-release-1.0');
+        console.log('  cggit hotfix -q qa-release-1.0');
+        console.log('  cggit hotfix -u uat-release-1.0');
+        console.log('  cggit hotfix -q qa-release-1.0 -u uat-release-1.0');
         process.exit(1);
       }
 
@@ -65,19 +65,19 @@ program
 program
   .command('pr')
   .description('Create pull requests for QA and/or UAT hotfix branches')
-  .option('--dev-pr <number>', 'DEV PR number to copy from (auto-detected from GitHub if not provided)')
-  .option('--qa <branch>', 'QA base branch name (e.g., qa-release-1.0)')
-  .option('--uat <branch>', 'UAT base branch name (e.g., uat-release-1.0)')
-  .option('--token <token>', 'GitHub personal access token (or set GITHUB_TOKEN env var)')
+  .option('-d, --dev-pr <number>', 'DEV PR number to copy from (auto-detected from GitHub if not provided)')
+  .option('-q, --qa <branch>', 'QA base branch name (e.g., qa-release-1.0)')
+  .option('-u, --uat <branch>', 'UAT base branch name (e.g., uat-release-1.0)')
+  .option('-t, --token <token>', 'GitHub personal access token (or set GITHUB_TOKEN env var)')
   .action(async (options) => {
     try {
       // Check that at least one of qa or uat is provided
       if (!options.qa && !options.uat) {
         console.error(chalk.red('Error: Must provide at least one of --qa or --uat'));
         console.log(chalk.yellow('\nExamples:'));
-        console.log('  cggit pr --qa qa-release-1.0');
-        console.log('  cggit pr --uat uat-release-1.0');
-        console.log('  cggit pr --dev-pr 123 --qa qa-release-1.0 --uat uat-release-1.0');
+        console.log('  cggit pr -q qa-release-1.0');
+        console.log('  cggit pr -u uat-release-1.0');
+        console.log('  cggit pr -d 123 -q qa-release-1.0 -u uat-release-1.0');
         process.exit(1);
       }
 
@@ -100,22 +100,22 @@ program
 program
   .command('release')
   .description('Create release tag for QA or UAT')
-  .option('--qa <branch>', 'Create QA release tag from QA branch')
-  .option('--uat <branch>', 'Create UAT release tag from UAT branch')
-  .option('--version <version>', 'Specific version tag (e.g., v1.23.5). If not provided, auto-increments from latest')
-  .option('--draft', 'Create as draft release (default: false)')
-  .option('--helm', 'Generate helm chart with version matching tag (default: false)')
+  .option('-q, --qa <branch>', 'Create QA release tag from QA branch')
+  .option('-u, --uat <branch>', 'Create UAT release tag from UAT branch')
+  .option('-v, --version <version>', 'Specific version tag (e.g., v1.23.5). If not provided, auto-increments from latest')
+  .option('-d, --draft', 'Create as draft release (default: false)')
+  .option('-h, --helm', 'Generate helm chart with version matching tag (default: false)')
   .action(async (options) => {
     try {
       // Check that exactly one of qa or uat is provided
       if ((!options.qa && !options.uat) || (options.qa && options.uat)) {
         console.error(chalk.red('Error: Must provide exactly one of --qa or --uat'));
         console.log(chalk.yellow('\nExamples:'));
-        console.log('  cggit release --qa release/v1.23                    # Auto-increment from latest');
-        console.log('  cggit release --qa release/v1.23 --version v1.23.5  # Specific version');
-        console.log('  cggit release --qa release/v1.23 --draft            # Create as draft');
-        console.log('  cggit release --qa release/v1.23 --helm             # Generate helm chart');
-        console.log('  cggit release --uat release/v1.23');
+        console.log('  cggit release -q release/v1.23           # Auto-increment from latest');
+        console.log('  cggit release -q release/v1.23 -v v1.23.5  # Specific version');
+        console.log('  cggit release -q release/v1.23 -d        # Create as draft');
+        console.log('  cggit release -q release/v1.23 -h        # Generate helm chart');
+        console.log('  cggit release -u release/v1.23           # UAT release');
         process.exit(1);
       }
 
@@ -139,7 +139,7 @@ program
 program
   .command('helm')
   .description('Trigger GitHub workflow to update helm chart')
-  .option('--version <version>', 'Version for helm chart (e.g., v1.23.5 or 1.23.5)')
+  .option('-v, --version <version>', 'Version for helm chart (e.g., v1.23.5 or 1.23.5)')
   .action(async (options) => {
     try {
       const HelmGenerator = require('../src/helm-generator');
@@ -159,12 +159,12 @@ if (process.argv.length === 2) {
   program.outputHelp();
   console.log('');
   console.log(chalk.cyan('Examples:'));
-  console.log(chalk.gray('  cggit setup                                         # Setup GitHub token'));
-  console.log(chalk.gray('  cggit hotfix --qa qa-release-1.0                    # Create hotfix branches'));
-  console.log(chalk.gray('  cggit pr --qa qa-release-1.0                        # Create PRs'));
-  console.log(chalk.gray('  cggit release --qa release/v1.23                    # Auto-increment release'));
-  console.log(chalk.gray('  cggit release --qa release/v1.23 --version v1.23.5  # Specific version'));
-  console.log(chalk.gray('  cggit helm --version v1.23.5                        # Update helm chart'));
+  console.log(chalk.gray('  cggit setup                           # Setup GitHub token'));
+  console.log(chalk.gray('  cggit hotfix -q qa-release-1.0        # Create hotfix branches'));
+  console.log(chalk.gray('  cggit pr -q qa-release-1.0            # Create PRs'));
+  console.log(chalk.gray('  cggit release -q release/v1.23        # Auto-increment release'));
+  console.log(chalk.gray('  cggit release -q release/v1.23 -v v1.23.5  # Specific version'));
+  console.log(chalk.gray('  cggit helm -v v1.23.5                 # Update helm chart'));
   console.log('');
 }
 
