@@ -1,0 +1,35 @@
+{
+  "name": "cggit",
+  "version": "3.0.0",
+  "description": "CLI tool to create hotfix branches for QA and UAT with cherry-pick commits",
+  "main": "src/index.js",
+  "bin": {
+    "cggit": "bin/cggit.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "git",
+    "hotfix",
+    "branches",
+    "cherry-pick",
+    "qa",
+    "uat",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@octokit/auth-oauth-device": "^6.0.1",
+    "@octokit/rest": "^20.0.2",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "inquirer": "^8.2.6",
+    "open": "^8.4.2",
+    "simple-git": "^3.22.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

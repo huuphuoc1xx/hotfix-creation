@@ -1,0 +1,28 @@
+# Source files not needed in npm package
+create-hotfix-branches.sh
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+coverage/
+.nyc_output/
+test/
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Documentation
+docs/
+examples/
+
+# Development
+*.md
+!README.md
+
