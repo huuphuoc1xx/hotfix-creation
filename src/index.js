@@ -10,6 +10,8 @@ class HotfixBranchCreator {
     this.noPush = options.noPush || false;
     this.qaBranch = options.qaBranch;
     this.uatBranch = options.uatBranch;
+    this.preProdBranch = options.preProdBranch;
+    this.prodBranch = options.prodBranch;
   }
 
   async run() {
@@ -30,6 +32,12 @@ class HotfixBranchCreator {
       }
       if (this.uatBranch) {
         await this.verifyBranchExists(this.uatBranch);
+      }
+      if (this.preProdBranch) {
+        await this.verifyBranchExists(this.preProdBranch);
+      }
+      if (this.prodBranch) {
+        await this.verifyBranchExists(this.prodBranch);
       }
 
       // Fetch latest changes
@@ -55,6 +63,8 @@ class HotfixBranchCreator {
       // Create hotfix branch names
       const hotfixQaBranch = this.qaBranch ? `${currentBranch}-for-qa` : null;
       const hotfixUatBranch = this.uatBranch ? `${currentBranch}-for-uat` : null;
+      const hotfixPreProdBranch = this.preProdBranch ? `${currentBranch}-for-pre-prod` : null;
+      const hotfixProdBranch = this.prodBranch ? `${currentBranch}-for-prod` : null;
 
       console.log('');
       console.log(chalk.yellow('Will create the following branches:'));
@@ -63,6 +73,12 @@ class HotfixBranchCreator {
       }
       if (hotfixUatBranch) {
         console.log(chalk.green(`  - ${hotfixUatBranch} (from ${this.uatBranch})`));
+      }
+      if (hotfixPreProdBranch) {
+        console.log(chalk.green(`  - ${hotfixPreProdBranch} (from ${this.preProdBranch})`));
+      }
+      if (hotfixProdBranch) {
+        console.log(chalk.green(`  - ${hotfixProdBranch} (from ${this.prodBranch})`));
       }
       console.log('');
 
@@ -84,6 +100,8 @@ class HotfixBranchCreator {
       // Create hotfix branches
       let qaResult = { success: false, skipped: true };
       let uatResult = { success: false, skipped: true };
+      let preProdResult = { success: false, skipped: true };
+      let prodResult = { success: false, skipped: true };
 
       if (hotfixQaBranch) {
         qaResult = await this.createHotfixBranch(
@@ -101,13 +119,29 @@ class HotfixBranchCreator {
         );
       }
 
+      if (hotfixPreProdBranch) {
+        preProdResult = await this.createHotfixBranch(
+          this.preProdBranch,
+          hotfixPreProdBranch,
+          commits
+        );
+      }
+
+      if (hotfixProdBranch) {
+        prodResult = await this.createHotfixBranch(
+          this.prodBranch,
+          hotfixProdBranch,
+          commits
+        );
+      }
+
       // Return to original branch
       console.log('');
       console.log(chalk.yellow(`Returning to original branch: ${currentBranch}`));
       await this.git.checkout(currentBranch);
 
       // Summary
-      await this.printSummary(qaResult, uatResult, hotfixQaBranch, hotfixUatBranch);
+      await this.printSummary(qaResult, uatResult, preProdResult, prodResult, hotfixQaBranch, hotfixUatBranch, hotfixPreProdBranch, hotfixProdBranch);
 
     } catch (error) {
       console.error(chalk.red(`Error: ${error.message}`));
@@ -338,7 +372,7 @@ class HotfixBranchCreator {
     return !hasOtherInConflict;
   }
 
-  async printSummary(qaResult, uatResult, hotfixQaBranch, hotfixUatBranch) {
+  async printSummary(qaResult, uatResult, preProdResult, prodResult, hotfixQaBranch, hotfixUatBranch, hotfixPreProdBranch, hotfixProdBranch) {
     console.log('');
     console.log(chalk.green('========================================'));
     console.log(chalk.green('Summary'));
@@ -358,6 +392,20 @@ class HotfixBranchCreator {
       branchesToPush.push(hotfixUatBranch);
     } else if (hotfixUatBranch) {
       console.log(chalk.red('✗ UAT hotfix branch failed or skipped'));
+    }
+
+    if (preProdResult.success) {
+      console.log(chalk.green(`✓ PRE-PROD hotfix branch created: ${hotfixPreProdBranch}`));
+      branchesToPush.push(hotfixPreProdBranch);
+    } else if (hotfixPreProdBranch) {
+      console.log(chalk.red('✗ PRE-PROD hotfix branch failed or skipped'));
+    }
+
+    if (prodResult.success) {
+      console.log(chalk.green(`✓ PROD hotfix branch created: ${hotfixProdBranch}`));
+      branchesToPush.push(hotfixProdBranch);
+    } else if (hotfixProdBranch) {
+      console.log(chalk.red('✗ PROD hotfix branch failed or skipped'));
     }
 
     // Push branches if not in no-push mode

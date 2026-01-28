@@ -6,11 +6,11 @@ const GitHubUtils = require('./utils/github-utils');
 class ReleaseCreator {
   constructor(options = {}) {
     this.git = simpleGit();
-    this.environment = options.environment; // 'qa' or 'uat'
     this.baseBranch = options.baseBranch; // e.g., 'release/v1.23'
     this.version = options.version; // specific version (e.g., 'v1.23.5')
     this.draft = options.draft || false; // create as draft release
     this.helm = options.helm || false; // generate helm chart with version
+    this.latest = options.latest || 'false'; // set as latest release
     this.githubToken = options.githubToken;
     this.octokit = null;
     this.owner = null;
@@ -23,21 +23,13 @@ class ReleaseCreator {
       console.log(chalk.cyan('║              Create Release Tag                           ║'));
       console.log(chalk.cyan('╚════════════════════════════════════════════════════════════╝\n'));
 
-      // Validate environment
-      if (!this.environment || !['qa', 'uat'].includes(this.environment.toLowerCase())) {
-        throw new Error('Environment must be either "qa" or "uat"');
-      }
-
-      const env = this.environment.toLowerCase();
-      const envUpper = env.toUpperCase();
-
       // Get base branch if not provided
       if (!this.baseBranch) {
         const { branch } = await inquirer.prompt([
           {
             type: 'input',
             name: 'branch',
-            message: `Enter ${envUpper} base branch name:`,
+            message: 'Enter release branch name (e.g., release/v1.23):',
             validate: (input) => {
               if (!input || input.trim() === '') {
                 return 'Branch name is required';
@@ -49,8 +41,7 @@ class ReleaseCreator {
         this.baseBranch = branch;
       }
 
-      console.log(chalk.green(`\nEnvironment: ${envUpper}`));
-      console.log(chalk.green(`Base branch: ${this.baseBranch}`));
+      console.log(chalk.green(`\nBase branch: ${this.baseBranch}`));
 
       // Initialize GitHub client (will load token automatically)
       this.octokit = await GitHubUtils.initOctokit(this.githubToken);
@@ -154,12 +145,6 @@ class ReleaseCreator {
         throw new Error('GitHub token is required to create releases. Run "cggit setup" first.');
       }
 
-      // Switch to base branch and pull latest
-      console.log(chalk.yellow(`\nSwitching to branch ${this.baseBranch}...`));
-      await this.git.checkout(this.baseBranch);
-      console.log(chalk.yellow('Pulling latest changes...'));
-      await this.git.pull();
-
       // Create GitHub Release (this will also create the tag)
       console.log(chalk.yellow(`\nCreating GitHub Release ${version}...`));
       console.log(chalk.gray('  Auto-generating release notes from commits...'));
@@ -213,6 +198,7 @@ class ReleaseCreator {
     // Find tags like v1.23.0, v1.23.1, v1.23.2, etc.
     try {
       // Get all tags
+      await this.git.fetch();
       const tags = await this.git.tags();
       
       // Filter tags with format: v1.23.x
@@ -274,7 +260,7 @@ class ReleaseCreator {
         name: tagName,
         generate_release_notes: true,
         target_commitish: this.baseBranch,
-        make_latest: 'false', // Do not set as latest release by default
+        make_latest: this.latest, // Do not set as latest release by default
         draft: this.draft // Create as draft if flag is set
       };
 

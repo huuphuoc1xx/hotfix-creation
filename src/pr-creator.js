@@ -9,6 +9,8 @@ class PullRequestCreator {
     this.devPrNumber = options.devPrNumber;
     this.qaBranch = options.qaBranch;
     this.uatBranch = options.uatBranch;
+    this.preProdBranch = options.preProdBranch;
+    this.prodBranch = options.prodBranch;
     this.githubToken = options.githubToken;
     this.octokit = null;
     this.owner = null;
@@ -72,6 +74,8 @@ class PullRequestCreator {
       // Create hotfix branch names
       const hotfixQaBranch = this.qaBranch ? `${currentBranch}-for-qa` : null;
       const hotfixUatBranch = this.uatBranch ? `${currentBranch}-for-uat` : null;
+      const hotfixPreProdBranch = this.preProdBranch ? `${currentBranch}-for-pre-prod` : null;
+      const hotfixProdBranch = this.prodBranch ? `${currentBranch}-for-prod` : null;
 
       // Verify hotfix branches exist
       if (hotfixQaBranch) {
@@ -79,6 +83,12 @@ class PullRequestCreator {
       }
       if (hotfixUatBranch) {
         await this.verifyBranchExists(hotfixUatBranch);
+      }
+      if (hotfixPreProdBranch) {
+        await this.verifyBranchExists(hotfixPreProdBranch);
+      }
+      if (hotfixProdBranch) {
+        await this.verifyBranchExists(hotfixProdBranch);
       }
 
       console.log('');
@@ -88,6 +98,12 @@ class PullRequestCreator {
       }
       if (hotfixUatBranch) {
         console.log(chalk.green(`  - ${hotfixUatBranch} → ${this.uatBranch}`));
+      }
+      if (hotfixPreProdBranch) {
+        console.log(chalk.green(`  - ${hotfixPreProdBranch} → ${this.preProdBranch}`));
+      }
+      if (hotfixProdBranch) {
+        console.log(chalk.green(`  - ${hotfixProdBranch} → ${this.prodBranch}`));
       }
       console.log('');
 
@@ -131,6 +147,30 @@ class PullRequestCreator {
           'UAT'
         );
         results.push({ type: 'UAT', pr: uatPr, branch: hotfixUatBranch });
+      }
+
+      if (hotfixPreProdBranch) {
+        console.log('');
+        console.log(chalk.yellow(`Creating PR for ${hotfixPreProdBranch}...`));
+        const preProdPr = await this.createPullRequest(
+          hotfixPreProdBranch,
+          this.preProdBranch,
+          devPr,
+          'PRE-PROD'
+        );
+        results.push({ type: 'PRE-PROD', pr: preProdPr, branch: hotfixPreProdBranch });
+      }
+
+      if (hotfixProdBranch) {
+        console.log('');
+        console.log(chalk.yellow(`Creating PR for ${hotfixProdBranch}...`));
+        const prodPr = await this.createPullRequest(
+          hotfixProdBranch,
+          this.prodBranch,
+          devPr,
+          'PROD'
+        );
+        results.push({ type: 'PROD', pr: prodPr, branch: hotfixProdBranch });
       }
 
       // Print summary
@@ -223,6 +263,21 @@ class PullRequestCreator {
     }
   }
 
+  async pushBranchToRemote(branchName) {
+    try {
+      console.log(chalk.gray(`  Pushing branch ${branchName} to remote...`));
+      await this.git.push('origin', branchName, ['--set-upstream', '--no-verify']);
+      console.log(chalk.green(`  ✓ Branch ${branchName} pushed to remote`));
+    } catch (error) {
+      // If branch already exists on remote, that's fine
+      if (error.message.includes('already exists')) {
+        console.log(chalk.gray(`  Branch ${branchName} already exists on remote`));
+        return;
+      }
+      throw new Error(`Failed to push branch ${branchName}: ${error.message}`);
+    }
+  }
+
   async getPullRequest(prNumber) {
     try {
       const { data } = await this.octokit.pulls.get({
@@ -274,6 +329,9 @@ class PullRequestCreator {
 
   async createPullRequest(headBranch, baseBranch, devPr, environment) {
     try {
+      // Push branch to remote first
+      await this.pushBranchToRemote(headBranch);
+
       // Prepare PR body with DEV PR reference
       const prBody = this.preparePrBody(devPr, environment);
 
