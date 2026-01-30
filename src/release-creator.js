@@ -7,6 +7,7 @@ class ReleaseCreator {
   constructor(options = {}) {
     this.git = simpleGit();
     this.baseBranch = options.baseBranch; // e.g., 'release/v1.23'
+    this.branchVersion = options.branchVersion; // e.g., '1.23'
     this.version = options.version; // specific version (e.g., 'v1.23.5')
     this.draft = options.draft || false; // create as draft release
     this.helm = options.helm || false; // generate helm chart with version
@@ -68,15 +69,18 @@ class ReleaseCreator {
         console.log(chalk.gray('  Note: Some tags could not be fetched (this is usually fine)'));
       }
 
-      // Extract version from branch name (e.g., release/v1.23 -> v1.23)
-      const branchVersionMatch = this.baseBranch.match(/release\/v(\d+\.\d+)$/);
-      if (!branchVersionMatch) {
-        throw new Error(`Branch name must match format: release/v1.23 (got: ${this.baseBranch})`);
+      if (!this.branchVersion) {
+        // Extract version from branch name (e.g., release/v1.23 -> v1.23)
+        const branchVersionMatch = this.baseBranch.match(/release\/v(\d+\.\d+)$/);
+        if (!branchVersionMatch) {
+          throw new Error(`Branch name must match format: release/v1.23 (got: ${this.baseBranch})`);
+        }
+        const branchVersion = branchVersionMatch[1]; // e.g., "1.23"
+        this.branchVersion = branchVersion;
       }
-      const branchVersion = branchVersionMatch[1]; // e.g., "1.23"
 
       // Find latest tag for this branch version
-      const latestTag = await this.findLatestTagForBranch(branchVersion);
+      const latestTag = await this.findLatestTagForBranch(this.branchVersion);
       
       let version;
       
@@ -91,8 +95,8 @@ class ReleaseCreator {
           throw new Error(`Version must match format: v1.23.5 (got: ${version})`);
         }
         const versionMatch = version.match(/^v(\d+\.\d+)\.\d+$/);
-        if (!versionMatch || versionMatch[1] !== branchVersion) {
-          throw new Error(`Version must start with v${branchVersion} (branch: release/v${branchVersion}, got: ${version})`);
+        if (!versionMatch || versionMatch[1] !== this.branchVersion ) {
+          throw new Error(`Version must start with v${this.branchVersion} (branch: release/v${branchVersion}, got: ${version})`);
         }
         
         if (latestTag) {
@@ -101,12 +105,12 @@ class ReleaseCreator {
       } else {
         // Auto-generate from latest tag
         if (latestTag) {
-          console.log(chalk.green(`✓ Latest tag for v${branchVersion}: ${latestTag}`));
+          console.log(chalk.green(`✓ Latest tag for v${this.branchVersion}: ${latestTag}`));
           version = this.incrementVersion(latestTag);
           console.log(chalk.cyan(`\nAuto-generated version: ${version}`));
         } else {
-          console.log(chalk.yellow(`⚠ No existing tags found for v${branchVersion}`));
-          version = `v${branchVersion}.0`;
+          console.log(chalk.yellow(`⚠ No existing tags found for v${this.branchVersion}`));
+          version = `v${this.branchVersion}.0`;
           console.log(chalk.cyan(`\nAuto-generated version: ${version}`));
         }
       }

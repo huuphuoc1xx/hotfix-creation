@@ -4,13 +4,15 @@ CLI tool to automatically create hotfix branches for QA and UAT with cherry-pick
 
 ## Features
 
-- ✅ Automatically create hotfix branches from QA and UAT base branches
+- ✅ **Save default branches** - Configure once, use everywhere
+- ✅ Automatically create hotfix branches from QA, UAT, PRE-PROD, and PROD base branches
 - ✅ Cherry-pick commits from current feature branch
 - ✅ Auto-resolve conflicts in package.json (version conflicts only)
 - ✅ Restore package.json versions to base branch versions
 - ✅ Support automatic or manual push
 - ✅ Colorful and easy-to-read interface
 - ✅ Confirmation prompts before important operations
+- ✅ Auto-detect DEV PR number from GitHub
 
 ## Installation
 
@@ -72,8 +74,93 @@ All functionality is available through the `cggit` command with subcommands:
 
 ```bash
 cggit setup      # Setup GitHub token
+cggit config     # Configure default branches (NEW! 🚀)
 cggit hotfix     # Create hotfix branches
 cggit pr         # Create pull requests
+cggit release    # Create GitHub release
+cggit helm       # Trigger helm chart update
+```
+
+### 🚀 Quick Start (Recommended Workflow)
+
+```bash
+# 1. Setup GitHub token (one time)
+cggit setup
+
+# 2. Configure default branches (one time)
+cggit config
+# Enter: qa-release-1.0, uat-release-1.0, pre-prod-release-1.0, prod-release-1.0
+
+# 3. Now you can use shortcuts! 🎉
+cggit hotfix -q -u --pre-prod -p
+cggit pr -q -u --pre-prod -p
+
+# That's it! No need to type branch names every time!
+```
+
+### Configure Default Branches (Recommended)
+
+Save your default branches once and never type them again! 🚀
+
+#### Option 1: Interactive Setup (All at once)
+
+```bash
+cggit config
+```
+
+This interactive command will ask for:
+- QA branch name (e.g., `qa-release-1.0`)
+- UAT branch name (e.g., `uat-release-1.0`)
+- PRE-PROD branch name (e.g., `pre-prod-release-1.0`)
+- PROD branch name (e.g., `prod-release-1.0`)
+
+#### Option 2: Set Individual Branches (One at a time)
+
+```bash
+# Set QA branch only
+cggit config -q qa-release-1.0
+
+# Set UAT branch only
+cggit config -u uat-release-1.0
+
+# Set PRE-PROD branch only
+cggit config --pre-prod pre-prod-release-1.0
+
+# Set PROD branch only
+cggit config -p prod-release-1.0
+
+# Set multiple branches at once
+cggit config -q qa-release-1.0 -u uat-release-1.0
+```
+
+**After configuration, you can use shortcuts:**
+
+```bash
+# Instead of typing full branch names:
+cggit hotfix --qa qa-release-1.0 --uat uat-release-1.0 --pre-prod pre-prod-release-1.0 -p prod-release-1.0
+
+# Just use flags:
+cggit hotfix -q -u --pre-prod -p
+
+# Same for PR creation:
+cggit pr -q -u --pre-prod -p
+```
+
+**Additional options:**
+
+```bash
+# Show current configuration
+cggit config --show
+
+# Clear saved configuration
+cggit config --clear
+```
+
+**Mix saved config with explicit values:**
+
+```bash
+# Use saved config for QA, UAT, PROD but override PRE-PROD
+cggit hotfix -q -u --pre-prod pre-prod-release-2.0 -p
 ```
 
 ### Setup GitHub Token (First Time)
@@ -120,34 +207,45 @@ cggit setup --clear
 #### Basic syntax
 
 ```bash
-cggit hotfix [--qa <qa-branch>] [--uat <uat-branch>] [options]
+cggit hotfix [--qa [branch]] [--uat [branch]] [--pre-prod [branch]] [--prod [branch]] [options]
 ```
 
 ### Examples
 
 ```bash
-# Create hotfix branch for QA only
+# Using saved config (recommended - after running 'cggit config')
+cggit hotfix -q -u --pre-prod -p
+
+# Create hotfix branch for QA only (explicit branch name)
 cggit hotfix --qa qa-release-1.0
 
 # Create hotfix branch for UAT only
 cggit hotfix --uat uat-release-1.0
 
-# Create hotfix branches for both QA and UAT
-cggit hotfix --qa qa-release-1.0 --uat uat-release-1.0
+# Create hotfix branch for PRE-PROD only
+cggit hotfix --pre-prod pre-prod-release-1.0
+
+# Create hotfix branches for all environments
+cggit hotfix --qa qa-release-1.0 --uat uat-release-1.0 --pre-prod pre-prod-release-1.0 --prod prod-release-1.0
+
+# Mix saved config with explicit values
+cggit hotfix -q -u --pre-prod pre-prod-release-2.0 -p
 
 # Create hotfix branches but don't push (for review first)
-cggit hotfix --qa qa-release-1.0 --uat uat-release-1.0 --no-push
+cggit hotfix -q -u --pre-prod -p --no-push
 ```
 
 #### Options
 
-- `--qa <branch>`: QA branch name to create hotfix from (optional)
-- `--uat <branch>`: UAT branch name to create hotfix from (optional)
+- `-q, --qa [branch]`: QA branch name. Use flag only to use saved config, or provide branch name explicitly.
+- `-u, --uat [branch]`: UAT branch name. Use flag only to use saved config, or provide branch name explicitly.
+- `--pre-prod [branch]`: PRE-PROD branch name. Use flag only to use saved config, or provide branch name explicitly.
+- `-p, --prod [branch]`: PROD branch name. Use flag only to use saved config, or provide branch name explicitly.
 - `-n, --no-push`: Create branches but don't push to remote
 - `-V, --version`: Display version
 - `-h, --help`: Display help
 
-**Note**: Must provide at least one of `--qa` or `--uat`
+**Note**: Must provide at least one environment
 
 ### Create Pull Requests
 
@@ -156,23 +254,29 @@ After creating hotfix branches, you can automatically create PRs that copy the D
 #### Basic syntax
 
 ```bash
-cggit pr [--dev-pr <number>] [--qa <qa-branch>] [--uat <uat-branch>] [options]
+cggit pr [--dev-pr <number>] [--qa [branch]] [--uat [branch]] [--pre-prod [branch]] [--prod [branch]] [options]
 ```
 
 #### Examples
 
 ```bash
+# Using saved config (recommended - after running 'cggit config')
+cggit pr -q -u --pre-prod -p
+
 # Auto-detect PR number from GitHub (recommended)
 cggit pr --qa qa-release-1.0
 
 # Create PR for UAT only
 cggit pr --uat uat-release-1.0
 
-# Create PRs for both QA and UAT
-cggit pr --qa qa-release-1.0 --uat uat-release-1.0
+# Create PRs for all environments
+cggit pr --qa qa-release-1.0 --uat uat-release-1.0 --pre-prod pre-prod-release-1.0 --prod prod-release-1.0
 
 # Explicitly specify DEV PR number (skip auto-detection)
-cggit pr --dev-pr 123 --qa qa-release-1.0
+cggit pr --dev-pr 123 -q -u --pre-prod -p
+
+# Mix saved config with explicit values
+cggit pr -q -u --pre-prod pre-prod-release-2.0 -p
 
 # With custom GitHub token
 cggit pr --qa qa-release-1.0 --token ghp_xxxxx
@@ -188,18 +292,21 @@ The tool automatically searches GitHub for PRs associated with your current bran
 
 #### Options
 
-- `--dev-pr <number>`: DEV PR number to copy from (optional - auto-detected from GitHub if not provided)
-- `--qa <branch>`: QA base branch name (optional)
-- `--uat <branch>`: UAT base branch name (optional)
-- `--token <token>`: GitHub personal access token (optional, uses GITHUB_TOKEN env var if not provided)
+- `-d, --dev-pr <number>`: DEV PR number to copy from (optional - auto-detected from GitHub if not provided)
+- `-q, --qa [branch]`: QA base branch name. Use flag only to use saved config, or provide branch name explicitly.
+- `-u, --uat [branch]`: UAT base branch name. Use flag only to use saved config, or provide branch name explicitly.
+- `--pre-prod [branch]`: PRE-PROD base branch name. Use flag only to use saved config, or provide branch name explicitly.
+- `-p, --prod [branch]`: PROD base branch name. Use flag only to use saved config, or provide branch name explicitly.
+- `-t, --token <token>`: GitHub personal access token (optional, uses saved token or GITHUB_TOKEN env var if not provided)
 - `-V, --version`: Display version
 - `-h, --help`: Display help
 
 **Note**: 
-- Must provide at least one of `--qa` or `--uat`
+- Must provide at least one environment
 - `--dev-pr` is optional - the tool will search GitHub for PRs associated with your current branch
-- Requires GitHub personal access token with `repo` scope
+- Requires GitHub personal access token with `repo` scope (use `cggit setup` to configure)
 - The PR body will include the original DEV PR description followed by "DEV PR: #<number>"
+- Branches are automatically pushed to remote before creating PRs
 
 #### GitHub Token Setup
 
@@ -289,19 +396,43 @@ cggit setup
 # Enter the code shown in GitHub
 # Token is automatically saved!
 
-# Step 1: Create hotfix branches
-cggit hotfix --qa qa-release-2.0 --uat uat-release-2.0
+# Step 1: Configure default branches (only needed once)
+cggit config
+# Enter: qa-release-2.0, uat-release-2.0, pre-prod-release-2.0, prod-release-2.0
+# Configuration is saved!
 
-# Step 2: Review and push (if not auto-pushed)
-git push origin feature/new-login-page-for-qa -f
-git push origin feature/new-login-page-for-uat -f
+# Step 2: Create hotfix branches (using saved config)
+cggit hotfix -q -u --pre-prod -p
+# Creates branches for all environments!
 
-# Step 3: Create PRs (PR number auto-detected from GitHub)
-cggit pr --qa qa-release-2.0 --uat uat-release-2.0
+# Step 3: Review and push (if not auto-pushed)
+git push origin feature/new-login-page-for-qa -f --no-verify
+git push origin feature/new-login-page-for-uat -f --no-verify
+git push origin feature/new-login-page-for-pre-prod -f --no-verify
+git push origin feature/new-login-page-for-prod -f --no-verify
+
+# Step 4: Create PRs (using saved config, PR number auto-detected)
+cggit pr -q -u --pre-prod -p
 # Searches GitHub for PR associated with current branch
 # Token is automatically loaded from saved file
+# Branches are automatically pushed to remote
+# Creates PRs for all environments!
 
 # Done! PRs are created with DEV PR description and reference
+```
+
+### Even Simpler Workflow (After Initial Setup)
+
+```bash
+# After running 'cggit setup' and 'cggit config' once:
+
+# Create hotfix branches
+cggit hotfix -q -u --pre-prod -p
+
+# Create PRs
+cggit pr -q -u --pre-prod -p
+
+# That's it! Just 2 commands! 🚀
 ```
 
 ## Detailed examples
