@@ -13,6 +13,7 @@ class ReleaseCreator {
     this.helm = options.helm || false; // generate helm chart with version
     this.latest = options.latest || 'false'; // set as latest release
     this.githubToken = options.githubToken;
+    this.yes = options.yes || false;
     this.octokit = null;
     this.owner = null;
     this.repo = null;
@@ -130,14 +131,18 @@ class ReleaseCreator {
       }
       console.log('');
 
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: 'Create this release tag?',
-          default: false
-        }
-      ]);
+      let confirm = this.yes;
+      if (!confirm) {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirm',
+            message: 'Create this release tag?',
+            default: false
+          }
+        ]);
+        confirm = answer.confirm;
+      }
 
       if (!confirm) {
         console.log(chalk.yellow('\nRelease creation cancelled'));
@@ -264,7 +269,7 @@ class ReleaseCreator {
         name: tagName,
         generate_release_notes: true,
         target_commitish: this.baseBranch,
-        make_latest: this.latest, // Do not set as latest release by default
+        make_latest: this.latest ? "true" : "false", // Do not set as latest release by default
         draft: this.draft // Create as draft if flag is set
       };
 

@@ -9,6 +9,7 @@ class HelmGenerator {
     this.version = options.version; // specific version (e.g., 'v1.23.5' or '1.23.5')
     this.workflowFile = 'helm-chart.yml'; // Fixed workflow file name
     this.githubToken = options.githubToken;
+    this.yes = options.yes || false;
     this.octokit = null;
     this.owner = null;
     this.repo = null;
@@ -70,14 +71,18 @@ class HelmGenerator {
       console.log(chalk.gray(`  Version: ${helmVersion}`));
       console.log('');
 
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: 'Trigger GitHub workflow to update helm chart?',
-          default: false
-        }
-      ]);
+      let confirm = this.yes;
+      if (!confirm) {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirm',
+            message: 'Trigger GitHub workflow to update helm chart?',
+            default: false
+          }
+        ]);
+        confirm = answer.confirm;
+      }
 
       if (!confirm) {
         console.log(chalk.yellow('\nWorkflow trigger cancelled'));

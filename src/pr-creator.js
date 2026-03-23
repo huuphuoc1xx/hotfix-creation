@@ -12,6 +12,7 @@ class PullRequestCreator {
     this.preProdBranch = options.preProdBranch;
     this.prodBranch = options.prodBranch;
     this.githubToken = options.githubToken;
+    this.yes = options.yes || false;
     this.octokit = null;
     this.owner = null;
     this.repo = null;
@@ -108,14 +109,18 @@ class PullRequestCreator {
       console.log('');
 
       // Confirm
-      const { proceed } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'proceed',
-          message: 'Do you want to proceed with PR creation?',
-          default: false
-        }
-      ]);
+      let proceed = this.yes;
+      if (!proceed) {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'proceed',
+            message: 'Do you want to proceed with PR creation?',
+            default: false
+          }
+        ]);
+        proceed = answer.proceed;
+      }
 
       if (!proceed) {
         console.log(chalk.yellow('Operation cancelled'));

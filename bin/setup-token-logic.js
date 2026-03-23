@@ -6,9 +6,10 @@ const os = require('os');
 const { Octokit } = require('@octokit/rest');
 
 class TokenManager {
-  constructor() {
+  constructor(options = {}) {
     this.configDir = path.join(os.homedir(), '.create-hotfix');
     this.tokenFile = path.join(this.configDir, 'github-token');
+    this.yes = options.yes || false;
   }
 
   async setupToken() {
@@ -56,14 +57,16 @@ class TokenManager {
       console.log(chalk.gray('  3. Click "Generate token" at the bottom'));
       console.log(chalk.gray('  4. Copy the token (you won\'t see it again!)\n'));
       
-      // Wait for user to create and copy token
-      await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'ready',
-          message: 'Press Enter when you have copied your token...',
-        }
-      ]);
+      // Wait for user to create and copy token (skip when -y)
+      if (!this.yes) {
+        await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'ready',
+            message: 'Press Enter when you have copied your token...',
+          }
+        ]);
+      }
       
       // Now prompt for token entry
       await this.enterAndSaveToken();
@@ -110,19 +113,23 @@ class TokenManager {
 
     console.log(chalk.green('✓ Token is valid!\n'));
 
-    const { saveOption } = await inquirer.prompt([
-      {
-        type: 'list',
-        name: 'saveOption',
-        message: 'How would you like to save the token?',
-        choices: [
-          { name: 'Save to file (~/.create-hotfix/github-token) - Recommended', value: 'file' },
-          { name: 'Show export command for environment variable', value: 'env' },
-          { name: 'Both', value: 'both' },
-          { name: 'Don\'t save (I\'ll use --token flag)', value: 'none' }
-        ]
-      }
-    ]);
+    let saveOption = this.yes ? 'file' : null;
+    if (saveOption === null) {
+      const answer = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'saveOption',
+          message: 'How would you like to save the token?',
+          choices: [
+            { name: 'Save to file (~/.create-hotfix/github-token) - Recommended', value: 'file' },
+            { name: 'Show export command for environment variable', value: 'env' },
+            { name: 'Both', value: 'both' },
+            { name: 'Don\'t save (I\'ll use --token flag)', value: 'none' }
+          ]
+        }
+      ]);
+      saveOption = answer.saveOption;
+    }
 
     if (saveOption === 'file' || saveOption === 'both') {
       await this.saveTokenToFile(token.trim());
@@ -206,14 +213,18 @@ class TokenManager {
       console.log(chalk.green('✓ Found in saved file (~/.create-hotfix/github-token)'));
       console.log(chalk.gray(`  Token: ${fileToken.substring(0, 10)}...${fileToken.substring(fileToken.length - 4)}`));
       
-      const { showFull } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'showFull',
-          message: 'Show full token?',
-          default: false
-        }
-      ]);
+      let showFull = this.yes;
+      if (!showFull) {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'showFull',
+            message: 'Show full token?',
+            default: false
+          }
+        ]);
+        showFull = answer.showFull;
+      }
 
       if (showFull) {
         console.log(chalk.yellow('\nFull token:'));
@@ -289,7 +300,7 @@ class TokenManager {
 }
 
 module.exports = async function(options) {
-  const tokenManager = new TokenManager();
+  const tokenManager = new TokenManager(options);
 
   if (options.verify) {
     await tokenManager.verifyToken();

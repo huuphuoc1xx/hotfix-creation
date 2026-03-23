@@ -8,6 +8,7 @@ class HotfixBranchCreator {
   constructor(options = {}) {
     this.git = simpleGit();
     this.noPush = options.noPush || false;
+    this.yes = options.yes || false;
     this.qaBranch = options.qaBranch;
     this.uatBranch = options.uatBranch;
     this.preProdBranch = options.preProdBranch;
@@ -25,30 +26,36 @@ class HotfixBranchCreator {
         throw new Error('You are currently on dev branch. Please switch to your feature branch first.');
       }
 
-      // Verify branches exist
-      await this.verifyBranchExists('dev');
-      if (this.qaBranch) {
-        await this.verifyBranchExists(this.qaBranch);
-      }
-      if (this.uatBranch) {
-        await this.verifyBranchExists(this.uatBranch);
-      }
-      if (this.preProdBranch) {
-        await this.verifyBranchExists(this.preProdBranch);
-      }
-      if (this.prodBranch) {
-        await this.verifyBranchExists(this.prodBranch);
-      }
-
-      // Fetch latest changes
+      // Fetch latest changes first (needed to auto-checkout remote branches)
       console.log(chalk.yellow('Fetching latest changes...'));
       await this.git.fetch('origin');
 
+      // Ensure branches exist locally (auto checkout from origin if not)
+      await this.ensureLocalBranch('dev');
+      if (this.qaBranch) {
+        await this.ensureLocalBranch(this.qaBranch);
+      }
+      if (this.uatBranch) {
+        await this.ensureLocalBranch(this.uatBranch);
+      }
+      if (this.preProdBranch) {
+        await this.ensureLocalBranch(this.preProdBranch);
+      }
+      if (this.prodBranch) {
+        await this.ensureLocalBranch(this.prodBranch);
+      }
+
+      // Return to current branch (ensureLocalBranch may have checked out another branch)
+      await this.git.checkout(currentBranch);
+
       // Get list of commits
-      const commits = await this.getCommitsBetween('origin/dev', currentBranch);
+      let commits = await this.getCommitsBetween('origin/dev', currentBranch);
       
       if (commits.length === 0) {
-        throw new Error(`No commits found between dev and ${currentBranch}`);
+        commits = await this.getCommitsBetween('dev', currentBranch);
+        if (commits.length === 0) {
+          throw new Error(`No commits found between dev and ${currentBranch}`);
+        }
       }
 
       console.log(chalk.green(`Found ${commits.length} commit(s) to cherry-pick`));
@@ -83,14 +90,18 @@ class HotfixBranchCreator {
       console.log('');
 
       // Confirm
-      const { proceed } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'proceed',
-          message: 'Do you want to proceed?',
-          default: false
-        }
-      ]);
+      let proceed = this.yes;
+      if (!proceed) {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'proceed',
+            message: 'Do you want to proceed?',
+            default: false
+          }
+        ]);
+        proceed = answer.proceed;
+      }
 
       if (!proceed) {
         console.log(chalk.yellow('Operation cancelled'));
@@ -154,12 +165,20 @@ class HotfixBranchCreator {
     return status.current;
   }
 
-  async verifyBranchExists(branchName) {
-    try {
-      await this.git.revparse(['--verify', branchName]);
-    } catch (error) {
-      throw new Error(`Branch '${branchName}' does not exist`);
+  async ensureLocalBranch(branchName) {
+    const existsLocally = await this.branchExists(branchName);
+    if (existsLocally) {
+      return;
     }
+    const remoteRef = `origin/${branchName}`;
+    try {
+      await this.git.revparse(['--verify', remoteRef]);
+    } catch {
+      throw new Error(`Branch '${branchName}' does not exist locally or on origin`);
+    }
+    console.log(chalk.yellow(`Branch ${branchName} not found locally, checking out from origin...`));
+    await this.git.checkout(['-b', branchName, remoteRef]);
+    console.log(chalk.green(`✓ Checked out ${branchName} from origin`));
   }
 
   async getCommitsBetween(baseBranch, targetBranch) {
@@ -181,14 +200,18 @@ class HotfixBranchCreator {
       const branchExists = await this.branchExists(hotfixBranch);
       if (branchExists) {
         console.log(chalk.yellow(`Warning: Branch ${hotfixBranch} already exists`));
-        const { recreate } = await inquirer.prompt([
-          {
-            type: 'confirm',
-            name: 'recreate',
-            message: 'Do you want to delete and recreate it?',
-            default: false
-          }
-        ]);
+        let recreate = this.yes;
+        if (!recreate) {
+          const answer = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'recreate',
+              message: 'Do you want to delete and recreate it?',
+              default: false
+            }
+          ]);
+          recreate = answer.recreate;
+        }
 
         if (recreate) {
           await this.git.branch(['-D', hotfixBranch]);
@@ -420,14 +443,18 @@ class HotfixBranchCreator {
       });
       console.log('');
 
-      const { pushConfirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'pushConfirm',
-          message: 'Do you want to push these branches to remote?',
-          default: false
-        }
-      ]);
+      let pushConfirm = this.yes;
+      if (!pushConfirm) {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'pushConfirm',
+            message: 'Do you want to push these branches to remote?',
+            default: false
+          }
+        ]);
+        pushConfirm = answer.pushConfirm;
+      }
 
       if (pushConfirm) {
         for (const branch of branchesToPush) {

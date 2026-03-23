@@ -17,6 +17,7 @@ program
   .option('--verify', 'Verify existing token')
   .option('--show', 'Show current token')
   .option('--clear', 'Clear saved token')
+  .option('-y, --yes', 'Skip all confirmation prompts')
   .action(async (options) => {
     try {
       // Import and run setup-token logic
@@ -42,6 +43,8 @@ program
   .option('--pre-prod-version <version>', 'Set PRE-PROD version (e.g., 1.23)')
   .option('-p, --prod <branch>', 'Set PROD branch')
   .option('--prod-version <version>', 'Set PROD version (e.g., 1.23)')
+  .option('--copy <from:to>', 'Copy config from one env to another (e.g., qa:uat, uat:pre-prod)')
+  .option('-y, --yes', 'Skip all confirmation prompts')
   .action(async (options) => {
     try {
       const configCommand = require('./config-logic');
@@ -61,6 +64,7 @@ program
   .option('--pre-prod [branch]', 'PRE-PROD base branch name (e.g., pre-prod-release-1.0). Use flag without value to use saved config.')
   .option('-p, --prod [branch]', 'PROD base branch name (e.g., prod-release-1.0). Use flag without value to use saved config.')
   .option('-n, --no-push', 'Create branches but don\'t push to remote')
+  .option('-y, --yes', 'Skip all confirmation prompts')
   .action(async (options) => {
     try {
       const ConfigManager = require('../src/utils/config-manager');
@@ -108,7 +112,8 @@ program
         uatBranch,
         preProdBranch,
         prodBranch,
-        noPush: options.noPush
+        noPush: options.noPush,
+        yes: options.yes
       });
 
       await creator.run();
@@ -128,6 +133,7 @@ program
   .option('--pre-prod [branch]', 'PRE-PROD base branch name (e.g., pre-prod-release-1.0). Use flag without value to use saved config.')
   .option('-p, --prod [branch]', 'PROD base branch name (e.g., prod-release-1.0). Use flag without value to use saved config.')
   .option('-t, --token <token>', 'GitHub personal access token (or set GITHUB_TOKEN env var)')
+  .option('-y, --yes', 'Skip all confirmation prompts')
   .action(async (options) => {
     try {
       const ConfigManager = require('../src/utils/config-manager');
@@ -178,7 +184,8 @@ program
         uatBranch,
         preProdBranch,
         prodBranch,
-        githubToken: options.token
+        githubToken: options.token,
+        yes: options.yes
       });
 
       await creator.run();
@@ -199,6 +206,7 @@ program
   .option('-l, --latest', 'Set as latest release (default: false)')
   .option('-h, --helm', 'Generate helm chart with version matching tag (default: false)')
   .option('-bv, --branch-version <branchVersion>', 'Branch version (e.g., 1.23)')
+  .option('-y, --yes', 'Skip all confirmation prompts')
   .action(async (options) => {
     try {
       const ConfigManager = require('../src/utils/config-manager');
@@ -250,7 +258,8 @@ program
         version: options.version,
         draft: options.draft,
         latest: options.latest,
-        helm: options.helm
+        helm: options.helm,
+        yes: options.yes
       });
 
       await creator.run();
@@ -266,6 +275,7 @@ program
   .description('Trigger GitHub workflow to update helm chart')
   .option('-v, --version <version>', 'Version for helm chart (e.g., v1.23.5 or 1.23.5)')
   .option('-e, --env <environment>', 'Environment (qa/uat/pre-prod/prod) - use saved version')
+  .option('-y, --yes', 'Skip all confirmation prompts')
   .action(async (options) => {
     try {
       const ConfigManager = require('../src/utils/config-manager');
@@ -315,7 +325,8 @@ program
       
       const HelmGenerator = require('../src/helm-generator');
       const generator = new HelmGenerator({
-        version
+        version,
+        yes: options.yes
       });
 
       await generator.run();
@@ -334,8 +345,9 @@ if (process.argv.length === 2) {
   console.log(chalk.gray('  cggit config                               # Configure all (interactive)'));
   console.log(chalk.gray('  cggit config -q qa-release-1.0 --qa-version 1.23  # Set QA branch + version'));
   console.log(chalk.gray('  cggit config --show                        # Show current config'));
-  console.log(chalk.gray('  cggit hotfix -q -u --pre-prod -p           # Use saved config'));
-  console.log(chalk.gray('  cggit pr -q -u --pre-prod -p               # Use saved config'));
+  console.log(chalk.gray('  cggit config --copy qa:uat                  # Copy QA config to UAT'));
+  console.log(chalk.gray('  cggit hotfix -q -u -p -y                    # Use saved config, skip prompts'));
+  console.log(chalk.gray('  cggit pr -q -u --pre-prod -p -y            # Use saved config, skip prompts'));
   console.log(chalk.gray('  cggit release --env qa                     # Release using QA config'));
   console.log(chalk.gray('  cggit release --env prod                   # Release using PROD config'));
   console.log(chalk.gray('  cggit release -b release/v1.23 -v v1.23.5  # Explicit branch + version'));

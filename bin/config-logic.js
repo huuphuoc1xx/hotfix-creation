@@ -2,8 +2,69 @@ const chalk = require('chalk');
 const inquirer = require('inquirer');
 const ConfigManager = require('../src/utils/config-manager');
 
+const ENV_MAP = {
+  'qa': 'qa',
+  'uat': 'uat',
+  'pre-prod': 'preProd',
+  'preprod': 'preProd',
+  'prod': 'prod'
+};
+
+const ENV_LABELS = { qa: 'QA', uat: 'UAT', preProd: 'PRE-PROD', prod: 'PROD' };
+
+function parseEnv(name) {
+  const key = ENV_MAP[name.toLowerCase()];
+  return key || null;
+}
+
 async function configCommand(options) {
   try {
+    // Copy config from one env to another
+    if (options.copy) {
+      const parts = options.copy.split(':').map(s => s.trim());
+      if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        console.error(chalk.red('Error: --copy must be in format <from:to>, e.g. qa:uat or uat:pre-prod'));
+        console.log(chalk.yellow('Valid environments: qa, uat, pre-prod, prod'));
+        return;
+      }
+      const fromKey = parseEnv(parts[0]);
+      const toKey = parseEnv(parts[1]);
+      if (!fromKey) {
+        console.error(chalk.red(`Invalid source environment: ${parts[0]}`));
+        console.log(chalk.yellow('Valid environments: qa, uat, pre-prod, prod'));
+        return;
+      }
+      if (!toKey) {
+        console.error(chalk.red(`Invalid target environment: ${parts[1]}`));
+        console.log(chalk.yellow('Valid environments: qa, uat, pre-prod, prod'));
+        return;
+      }
+      if (fromKey === toKey) {
+        console.error(chalk.red('Source and target environment must be different'));
+        return;
+      }
+      const currentConfig = await ConfigManager.loadConfig();
+      const fromConfig = currentConfig[fromKey];
+      const branch = typeof fromConfig === 'string' ? fromConfig : (fromConfig && fromConfig.branch);
+      const version = typeof fromConfig === 'object' && fromConfig ? fromConfig.version : null;
+      if (!branch && !version) {
+        console.error(chalk.red(`No config to copy from ${ENV_LABELS[fromKey]}`));
+        return;
+      }
+      if (typeof currentConfig[toKey] !== 'object' || currentConfig[toKey] === null) {
+        currentConfig[toKey] = { branch: null, version: null };
+      }
+      if (branch) currentConfig[toKey].branch = branch;
+      if (version) currentConfig[toKey].version = version;
+      await ConfigManager.saveConfig(currentConfig);
+      console.log(chalk.green(`✓ Copied config from ${ENV_LABELS[fromKey]} to ${ENV_LABELS[toKey]}`));
+      if (branch) console.log(chalk.gray(`  Branch: ${branch}`));
+      if (version) console.log(chalk.gray(`  Version: ${version}`));
+      console.log('');
+      await ConfigManager.displayConfig();
+      return;
+    }
+
     // Show current config
     if (options.show) {
       await ConfigManager.displayConfig();
@@ -12,14 +73,18 @@ async function configCommand(options) {
 
     // Clear config
     if (options.clear) {
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: 'Are you sure you want to clear all branch configuration?',
-          default: false
-        }
-      ]);
+      let confirm = options.yes === true;
+      if (!confirm) {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirm',
+            message: 'Are you sure you want to clear all branch configuration?',
+            default: false
+          }
+        ]);
+        confirm = answer.confirm;
+      }
 
       if (confirm) {
         await ConfigManager.clearConfig();
